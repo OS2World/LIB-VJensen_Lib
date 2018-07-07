@@ -1,0 +1,861 @@
+head	1.9;
+access;
+symbols
+	VSETUP_82:1.9
+	PDSK1:1.6;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	99.11.11.21.49.41;	author vitus;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	98.12.12.18.47.40;	author vitus;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	98.12.11.03.09.46;	author vitus;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	98.07.30.09.26.36;	author vitus;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	98.05.20.01.16.23;	author vitus;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	98.04.29.01.53.02;	author vitus;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	98.04.01.01.10.56;	author vitus;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.03.14.14.06.19;	author vitus;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.03.11.02.34.43;	author vitus;	state Exp;
+branches;
+next	;
+
+
+desc
+@Routines to directly access physical devices
+@
+
+
+1.9
+log
+@- renamed PDskLock/PDskUnlock to PDskLockIO/PDskUnlockIO
+@
+text
+@/*
+ * $Source: r:/source/lib/RCS/physdsk.c,v $
+ * $Revision: 1.8 $
+ * $Date: 1998/12/12 18:47:40 $
+ * $Locker: vitus $
+ *
+ *	Routines to directly access physical devices (disk),
+ *	*NOT* logical partitions!
+ *
+ * $Log: physdsk.c,v $
+ * Revision 1.8  1998/12/12 18:47:40  vitus
+ * - PDskOpen: failures in PDSK_GETPHYSDEVICEPARAMS should close
+ *   the allocated handle, corrected
+ *
+ * Revision 1.7  1998/12/11 03:09:46  vitus
+ * - PDskOpen korrigiert: 'open' wird schon von Allocate() gesetzt, entfernt.
+ *
+ * Revision 1.6  1998/07/30 09:26:36  vitus
+ * - relocated source, #includes updated
+ *
+ * Revision 1.5  1998/05/20 01:16:23  vitus
+ * - includes physdsk.h (instead of proto.h)
+ *
+ * Revision 1.4  1998/04/29 01:53:02  vitus
+ * - handle meaning now index in local table
+ *
+ * Revision 1.3  1998/04/01 01:10:56  vitus
+ * - now uses DevTab structure and returns pointer to it as handle
+ *
+ * Revision 1.2  1998/03/14 14:06:19  vitus
+ * - added PDskLock, PdskUnlock
+ *
+ * Revision 1.1  1998/03/11 02:34:43  vitus
+ * Initial revision
+ * ----------------------------------------
+ * This code is given to the public domain
+ */
+static char const id[]="$Id: physdsk.c,v 1.8 1998/12/12 18:47:40 vitus Exp vitus $";
+
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define INCL_DOS
+#define INCL_DOSDEVIOCTL
+#define INCL_ERRORS
+#include <os2.h>
+
+#include "defines.h"
+#include "physdsk.h"
+
+
+#define SECTORSIZE	512
+#define MAX_DEVICES	32
+
+
+
+typedef struct _DEVTAB {
+    USHORT		open;
+    USHORT		hd;			/* from GET_IOCTLHANDLE */
+    DEVICEPARAMETERBLOCK layout;		/* layout of disk */
+} DEVTAB, * PDEVTAB;
+
+PRIVATE DEVTAB	DevTab[MAX_DEVICES] = {0};
+
+
+
+
+
+PRIVATE PDEVTAB
+Allocate(void)
+{
+    int	i;
+
+    for( i = 0; i < MAX_DEVICES; ++i )
+	if( !DevTab[i].open )
+	{
+	    DevTab[i].open = 1;
+	    return &DevTab[i];
+	}
+    return NULL;
+}
+
+PRIVATE void
+Free(PDEVTAB dt)
+{
+    assert( dt->open != 0 );
+    memset(dt, 0, sizeof(*dt));
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskEnum(count)
+ * PARAMETER
+ *	count		returns count
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Returns count of installed hard disks.
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskEnum(PULONG count)
+{
+    APIRET	rc;
+    USHORT	us;
+
+    rc = DosPhysicalDisk(INFO_COUNT_PARTITIONABLE_DISKS,
+			 &us, sizeof(us),
+			 NULL, 0);
+    if( rc == 0 )
+	*count = us;
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskOpen(idx,handle)
+ * PARAMETER
+ *	idx		disk index (0 - N-1)
+ *	handle		returns handle
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Enables access to a hard disk.
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskOpen(ULONG idx,PULONG handle)
+{
+    APIRET	rc;
+    char	str[20];
+    PDEVTAB	dt = Allocate();
+
+    if( dt == NULL )
+	return ERROR_TOO_MANY_OPEN_FILES;
+
+    sprintf(str, "%lu:", idx+1);
+    rc = DosPhysicalDisk(INFO_GETIOCTLHANDLE,
+			 &dt->hd, sizeof(dt->hd),
+			 str, strlen(str)+1);
+    if( rc == 0 )
+    {
+	UCHAR	ucParm = 0;
+	ULONG	ulParmLen = sizeof(ucParm);
+	ULONG	ulDataLen = sizeof(dt->layout);
+
+	rc = DosDevIOCtl(dt->hd, IOCTL_PHYSICALDISK, PDSK_GETPHYSDEVICEPARAMS,
+			 &ucParm, ulParmLen, &ulParmLen,
+			 &dt->layout, ulDataLen, &ulDataLen);
+	if( rc != 0 )
+	    PDskClose((ULONG)dt);
+	else
+	    *handle = (ULONG)dt;
+    }
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskClose(handle)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Ends hard disk access.
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskClose(ULONG handle)
+{
+    APIRET	rc;
+    PDEVTAB	dt = (PDEVTAB)handle;
+
+    rc = DosPhysicalDisk(INFO_FREEIOCTLHANDLE,
+			 NULL, 0,
+			 &dt->hd, sizeof(dt->hd));
+    Free(dt);
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskQueryParam(handle,dp)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *	dp		returns structure
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Returns OS/2 structure about physical parameters (plates, etc.)
+ *	of this hard disk unit.
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskQueryParam(ULONG handle,PDEVICEPARAMETERBLOCK dp)
+{
+    PDEVTAB	dt = (PDEVTAB)handle;
+
+    memcpy(dp, &dt->layout, sizeof(dt->layout));
+    return 0;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskLockIO(handle)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Locks the hard disk unit so that no other process
+ *	may write to it.
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskLockIO(ULONG handle)
+{
+    APIRET	rc;
+    PDEVTAB	dt = (PDEVTAB)handle;
+    UCHAR	ucParm = 0;
+    ULONG	ulParmLen = sizeof(ucParm);
+    UCHAR	aucData[31];
+    ULONG	ulDataLen = sizeof(aucData);
+
+    memset(aucData, 0, sizeof(aucData));
+    rc = DosDevIOCtl(dt->hd, IOCTL_PHYSICALDISK, PDSK_LOCKPHYSDRIVE,
+		     &ucParm, ulParmLen, &ulParmLen,
+		     aucData, ulDataLen, &ulDataLen);
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskUnlockIO(handle)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Reverse the effect of PDskLockIO().
+ *
+ * REMARKS
+ */
+PUBLIC APIRET
+PDskUnlockIO(ULONG handle)
+{
+    APIRET	rc;
+    PDEVTAB	dt = (PDEVTAB)handle;
+    UCHAR	ucParm = 0;
+    ULONG	ulParmLen = sizeof(ucParm);
+    UCHAR	aucData[31];
+    ULONG	ulDataLen = sizeof(aucData);
+
+    memset(aucData, 0, sizeof(aucData));
+    rc = DosDevIOCtl(dt->hd, IOCTL_PHYSICALDISK, PDSK_UNLOCKPHYSDRIVE,
+		     &ucParm, ulParmLen, &ulParmLen,
+		     aucData, ulDataLen, &ulDataLen);
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskRead(handle,secno,seccnt,data)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *	secno		sector no (0 - N-1)
+ *	seccnt		how may sectors
+ *	data		place data here
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Reads one or more sectors from disk into memory.
+ *
+ * REMARKS
+ *	Be carefull when reading more than a single sector: they shouldn't
+ *	span more than a track.
+ */
+PUBLIC APIRET
+PDskRead(ULONG handle,ULONG secno,USHORT seccnt,PVOID data)
+{
+    APIRET	rc;
+    USHORT	i;
+    PDEVTAB	dt = (PDEVTAB)handle;
+    ULONG	ulParmLen = sizeof(TRACKLAYOUT) + (seccnt - 1) * 4;
+    PTRACKLAYOUT	tl = malloc(ulParmLen);
+    ULONG	ulDataLen = seccnt * SECTORSIZE;
+    USHORT	sector;
+
+    if( tl == NULL )
+	return ERROR_NOT_ENOUGH_MEMORY;
+
+    tl->bCommand = 0;
+    sector = secno % dt->layout.cSectorsPerTrack + 1;
+    tl->usHead = (secno / dt->layout.cSectorsPerTrack) % dt->layout.cHeads;
+    tl->usCylinder = secno / (dt->layout.cSectorsPerTrack
+			      * ((ULONG)dt->layout.cHeads));
+    tl->usFirstSector = 0;			/* index in track table? */
+    tl->cSectors = seccnt;
+    for( i = 0; i < seccnt; ++i )
+    {
+	tl->TrackTable[i].usSectorNumber = sector + i;
+	tl->TrackTable[i].usSectorSize = SECTORSIZE;
+    }
+    rc = DosDevIOCtl(dt->hd, IOCTL_PHYSICALDISK, PDSK_READPHYSTRACK,
+		     tl, ulParmLen, &ulParmLen,
+		     data, ulDataLen, &ulDataLen);
+
+    free(tl);
+    return rc;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * CALL
+ *	PDskWrite(handle,secno,seccnt,data)
+ * PARAMETER
+ *	handle		from PDskOpen()
+ *	secno		sector no (0 - N-1)
+ *	seccnt		how may sectors
+ *	data		place data here
+ *
+ * RETURNS
+ *	APIRET
+ *
+ * DESCRIPTION
+ *	Writes one or more sectors to disk.
+ *
+ * REMARKS
+ *	Be carefull when writing more than a single sector: they shouldn't
+ *	span more than a track.
+ */
+PUBLIC APIRET
+PDskWrite(ULONG handle,ULONG secno,USHORT seccnt,PVOID data)
+{
+    APIRET	rc;
+    USHORT	i;
+    PDEVTAB	dt = (PDEVTAB)handle;
+    ULONG	ulParmLen = sizeof(TRACKLAYOUT) + (seccnt - 1) * 4;
+    PTRACKLAYOUT	tl = malloc(ulParmLen);
+    ULONG	ulDataLen = seccnt * SECTORSIZE;
+    USHORT	sector;
+
+    if( tl == NULL )
+	return ERROR_NOT_ENOUGH_MEMORY;
+
+    tl->bCommand = 0;
+    sector = secno % dt->layout.cSectorsPerTrack + 1;
+    tl->usHead = (secno / dt->layout.cSectorsPerTrack) % dt->layout.cHeads;
+    tl->usCylinder = secno / (dt->layout.cSectorsPerTrack
+			      * ((ULONG)dt->layout.cHeads));
+    tl->usFirstSector = 0;			/* index in track table? */
+    tl->cSectors = seccnt;
+    for( i = 0; i < seccnt; ++i )
+    {
+	tl->TrackTable[i].usSectorNumber = sector + i;
+	tl->TrackTable[i].usSectorSize = SECTORSIZE;
+    }
+    rc = DosDevIOCtl(dt->hd, IOCTL_PHYSICALDISK, PDSK_WRITEPHYSTRACK,
+		     tl, ulParmLen, &ulParmLen,
+		     data, ulDataLen, &ulDataLen);
+    free(tl);
+    return rc;
+}
+@
+
+
+1.8
+log
+@- PDskOpen: failures in PDSK_GETPHYSDEVICEPARAMS should close
+  the allocated handle, corrected
+@
+text
+@d3 3
+a5 3
+ * $Revision: 1.7 $
+ * $Date: 1998/12/11 03:09:46 $
+ * $Locker$
+d11 4
+d38 1
+a38 1
+static char const id[]="$Id: physdsk.c,v 1.7 1998/12/11 03:09:46 vitus Exp vitus $";
+d89 1
+a89 2
+
+    dt->open = 0;
+d235 1
+a235 1
+ *	PDskLock(handle)
+d249 1
+a249 1
+PDskLock(ULONG handle)
+d270 1
+a270 1
+ *	PDskUnlock(handle)
+d278 1
+a278 1
+ *	Reverse the effect of PDskLock().
+d283 1
+a283 1
+PDskUnlock(ULONG handle)
+@
+
+
+1.7
+log
+@- PDskOpen: 'open' already set by Allocate(), removed
+@
+text
+@d2 4
+a5 4
+ * $Source: r:/source/tools/RCS/physdsk.c,v $
+ * $Revision: 1.6 $
+ * $Date: 1998/07/30 09:26:36 $
+ * $Author: vitus $
+d7 2
+a8 2
+ * Routines to directly access physical devices (disk),
+ * *NOT* logical partitions!
+d11 3
+d32 1
+a32 1
+ * This code is Copyright Vitus Jensen 1998
+d34 1
+a34 1
+static char const vcid[]="$Id: physdsk.c,v 1.6 1998/07/30 09:26:36 vitus Exp vitus $";
+d92 1
+a92 1
+/*#
+d94 1
+d96 2
+d99 2
+a100 1
+ * GLOBAL
+d102 1
+a102 1
+ *	Returns count of installed disks.
+d123 1
+a123 1
+/*#
+d125 1
+d127 3
+d131 2
+a132 1
+ * GLOBAL
+d134 1
+a134 1
+ *	Enables access to a disk.
+a157 2
+	*handle = (ULONG)dt;
+
+d161 4
+d172 14
+d202 16
+d230 15
+d265 14
+d299 19
+d355 19
+@
+
+
+1.6
+log
+@- relocated source, #includes updated
+@
+text
+@d2 3
+a4 3
+ * $Source: d:/source/tools/RCS/physdsk.c,v $
+ * $Revision: 1.5 $
+ * $Date: 1998/05/20 01:16:23 $
+d11 3
+d31 1
+a31 1
+static char const vcid[]="$Id: physdsk.c,v 1.5 1998/05/20 01:16:23 vitus Exp vitus $";
+a146 1
+	dt->open = 1;
+@
+
+
+1.5
+log
+@- includes physdsk.h (instead of proto.h)
+@
+text
+@d2 3
+a4 3
+ * $Source: d:/source/driver/raid/setup/RCS/physdsk.c,v $
+ * $Revision: 1.4 $
+ * $Date: 1998/04/29 01:53:02 $
+d11 3
+d28 1
+a28 1
+static char const vcid[]="$Id: physdsk.c,v 1.4 1998/04/29 01:53:02 vitus Exp vitus $";
+d40 1
+a40 1
+#include "../../../tools/defines.h"
+@
+
+
+1.4
+log
+@- handle meaning now index in local table
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.3 $
+ * $Date: 1998/04/01 01:10:56 $
+d11 3
+d25 1
+a25 1
+static char const id[]="$Id: physdsk.c,v 1.3 1998/04/01 01:10:56 vitus Exp vitus $";
+d38 1
+a38 1
+#include "proto.h"
+@
+
+
+1.3
+log
+@- now uses DevTab structure and returns pointer to it as handle
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.2 $
+ * $Date: 1998/03/14 14:06:19 $
+d11 3
+d22 1
+a22 1
+static char const id[]="$Id: physdsk.c,v 1.2 1998/03/14 14:06:19 vitus Exp vitus $";
+d25 1
+d39 3
+d43 1
+a43 1
+PRIVATE struct {
+d47 12
+a58 1
+} DevTab = {0};
+d60 16
+d122 1
+d124 1
+a124 1
+    if( DevTab.open )
+d129 1
+a129 1
+			 &DevTab.hd, sizeof(DevTab.hd),
+d135 1
+a135 1
+	ULONG	ulDataLen = sizeof(DevTab.layout);
+d137 2
+a138 2
+	*handle = (ULONG)&DevTab;
+	DevTab.open = 1;
+d140 1
+a140 1
+	rc = DosDevIOCtl(DevTab.hd, IOCTL_PHYSICALDISK, PDSK_GETPHYSDEVICEPARAMS,
+d142 1
+a142 1
+			 &DevTab.layout, ulDataLen, &ulDataLen);
+d154 1
+a154 3
+
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+d158 2
+a159 2
+			 &DevTab.hd, sizeof(DevTab.hd));
+    DevTab.open = 0;
+d169 1
+a169 2
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+d171 1
+a171 1
+    memcpy(dp, &DevTab.layout, sizeof(DevTab.layout));
+d182 1
+a187 3
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+
+d189 1
+a189 1
+    rc = DosDevIOCtl(DevTab.hd, IOCTL_PHYSICALDISK, PDSK_LOCKPHYSDRIVE,
+d202 1
+a207 3
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+
+d209 1
+a209 1
+    rc = DosDevIOCtl(DevTab.hd, IOCTL_PHYSICALDISK, PDSK_UNLOCKPHYSDRIVE,
+d223 1
+a228 2
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+d233 4
+a236 4
+    sector = secno % DevTab.layout.cSectorsPerTrack + 1;
+    tl->usHead = (secno / DevTab.layout.cSectorsPerTrack) % DevTab.layout.cHeads;
+    tl->usCylinder = secno / (DevTab.layout.cSectorsPerTrack
+			      * ((ULONG)DevTab.layout.cHeads));
+d244 1
+a244 1
+    rc = DosDevIOCtl(DevTab.hd, IOCTL_PHYSICALDISK, PDSK_READPHYSTRACK,
+d260 1
+a265 2
+    if( handle != (ULONG)&DevTab )
+	return ERROR_INVALID_HANDLE;
+d270 4
+a273 4
+    sector = secno % DevTab.layout.cSectorsPerTrack + 1;
+    tl->usHead = (secno / DevTab.layout.cSectorsPerTrack) % DevTab.layout.cHeads;
+    tl->usCylinder = secno / (DevTab.layout.cSectorsPerTrack
+			      * ((ULONG)DevTab.layout.cHeads));
+d281 1
+a281 1
+    rc = DosDevIOCtl(DevTab.hd, IOCTL_PHYSICALDISK, PDSK_WRITEPHYSTRACK,
+@
+
+
+1.2
+log
+@- added PDskLock, PdskUnlock
+@
+text
+@d2 3
+a4 3
+ * $Source: d:/source/driver/raid/setup/physdsk.c,v $
+ * $Revision: 1.1 $
+ * $Date: 1998/03/11 02:34:43 $
+d11 3
+d19 1
+a19 1
+static char const id[]="$Id: physdsk.c,v 1.1 1998/03/11 02:34:43 vitus Exp vitus $";
+d27 1
+d31 2
+d36 7
+d44 12
+d73 10
+a86 1
+    USHORT	us;
+d89 3
+d94 1
+a94 1
+			 &us, sizeof(us),
+d97 12
+a108 1
+	*handle = us;
+d119 3
+a121 1
+    USHORT	us = handle;
+d125 2
+a126 1
+			 &us, sizeof(us));
+d136 2
+a137 4
+    APIRET	rc;
+    UCHAR	ucParm = 0;
+    ULONG	ulParmLen = sizeof(ucParm);
+    ULONG	ulDataLen = sizeof(*dp);
+d139 2
+a140 4
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_GETPHYSDEVICEPARAMS,
+		     &ucParm, ulParmLen, &ulParmLen,
+		     dp, ulDataLen, &ulDataLen);
+    return rc;
+d155 3
+d159 1
+a159 1
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_LOCKPHYSDRIVE,
+d177 3
+d181 1
+a181 1
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_UNLOCKPHYSDRIVE,
+d191 1
+a191 2
+PDskReadTrack(ULONG handle,USHORT cyl,USHORT head,USHORT sec,
+	      USHORT seccnt,PVOID data)
+a194 1
+    static TRACKLAYOUT	def;
+d196 1
+a196 1
+    PTRACKLAYOUT	tl = &def;
+d198 1
+d200 4
+a203 6
+    if( seccnt > 1 )
+    {
+	tl = malloc(ulParmLen);
+	if( tl == NULL )
+	    return 0xFFFF;
+    }
+d206 4
+a209 2
+    tl->usHead = head;
+    tl->usCylinder = cyl;
+d214 1
+a214 1
+	tl->TrackTable[i].usSectorNumber = sec + i;
+d217 1
+a217 1
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_READPHYSTRACK,
+d220 2
+a221 2
+    if( tl != &def )
+	free(tl);
+d229 1
+a229 2
+PDskWriteTrack(ULONG handle,USHORT cyl,USHORT head,USHORT sec,
+	       USHORT seccnt,PVOID data)
+d236 1
+d238 2
+d241 1
+a241 1
+	return 0xFFFF;
+d244 4
+a247 2
+    tl->usHead = head;
+    tl->usCylinder = cyl;
+d252 1
+a252 1
+	tl->TrackTable[i].usSectorNumber = sec + i;
+d255 1
+a255 1
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_WRITEPHYSTRACK,
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d2 4
+a5 4
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Author$
+d10 3
+a12 1
+ * $Log$
+d16 1
+a16 1
+static char const id[]="$Id$";
+d100 38
+d199 1
+a199 1
+    rc = DosDevIOCtl(handle, IOCTL_PHYSICALDISK, PDSK_READPHYSTRACK,
+@

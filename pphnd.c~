@@ -1,0 +1,130 @@
+/*
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Locker$
+ *
+ *
+ *
+ * $Log$
+ * ----------------------------------------
+ * This code is Copyright Vitus Jensen 2000
+ */
+static char const vcid[]="$Id$";
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define INCL_WIN
+#include <os2.h>
+
+#include "../../../Lib/defines.h"
+#include "../../../Lib/verbose.h"
+#include "../../../Lib/profile.h"		/* profile handling */
+#include "pphnd.h"
+
+
+
+#define MAX_PP_SIZE	260
+
+
+
+typedef struct _SUBCLASSINFO {
+    PFNWP	pfnOldWp;
+    HWND	hwnd;
+    PCSZ	title;
+    ULONG	datalen;
+    PVOID	data;
+} SUBCLASSINFO, * PSUBCLASSINFO;
+
+
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * <fkt>
+ *
+ * PARAMETER
+ * RETURNS
+ * DESCRIPTION
+ * REMARKS
+ */
+PRIVATE BOOL
+AdjustPresParam(HWND hwnd, PCSZ app, ULONG PresParam)
+{
+    PUCHAR	value = malloc(MAX_PP_SIZE);
+    ULONG	found;
+    ULONG	cb = WinQueryPresParam(hwnd, PresParam, 0,
+				       &found, MAX_PP_SIZE,
+				       value, QPF_NOINHERIT);
+    if( cb != 0 )
+    {
+	ULONG	ul = WinQueryWindowUShort(hwnd, QWS_ID);
+	char	key[9];
+	sprintf(key, "%lX", ul);
+	ProfileWrite(app, key, cb, value);
+    }
+
+    free(value);
+    return TRUE;
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * <fkt>
+ *
+ * PARAMETER
+ * RETURNS
+ * DESCRIPTION
+ * REMARKS
+ */
+PRIVATE MRESULT EXPENTRY
+PPSubclassProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
+{
+    PSUBCLASSINFO   sInfo = (PSUBCLASSINFO)WinQueryWindowULong(hwnd, QWL_USER);
+    PFNWP const     pfnOldProc = sInfo->pfnOldWp;
+
+    if( msg == WM_PRESPARAMCHANGED )
+	AdjustPresParam(hwnd, sInfo->title, (ULONG)mp1);
+    else if( msg == WM_DESTROY )
+    {
+	free(sInfo->data);
+	free(sInfo); 
+	WinSubclassWindow(hwnd, pfnOldProc);
+    }
+    return pfnOldProc(hwnd, msg, mp1, mp2);
+}
+
+
+
+
+/*# ----------------------------------------------------------------------
+ * <fkt>
+ *
+ * PARAMETER
+ * RETURNS
+ * DESCRIPTION
+ * REMARKS
+ */
+PUBLIC BOOL
+PPSubclassWindow(HWND hwnd, PCSZ title, ULONG datalen, PVOID data)
+{
+    PSUBCLASSINFO const	NewRec = (PSUBCLASSINFO)calloc(1, sizeof(SUBCLASSINFO));
+
+    NewRec->hwnd = hwnd;
+    NewRec->title = title;
+    if( data  &&  datalen )
+    {
+	NewRec->datalen = datalen;
+	NewRec->data = malloc(datalen);
+	memcpy(NewRec->data, data, datalen);
+    }
+
+    WinSetWindowULong(hwnd, QWL_USER, (ULONG)NewRec);
+    NewRec->pfnOldWp = WinSubclassWindow(hwnd, PPSubclassProc);
+    return TRUE;
+}

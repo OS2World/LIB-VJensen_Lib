@@ -1,0 +1,79 @@
+head	1.2;
+access;
+symbols
+	VSETUP_82:1.2
+	PDSK1:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	99.11.11.20.11.42;	author vitus;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.04.29.02.00.16;	author vitus;	state Exp;
+branches;
+next	;
+
+
+desc
+@Interface to physdsk.c
+@
+
+
+1.2
+log
+@- renamed PDskLock/PDskUnlock to PDskLockIO/PDskUnlockIO
+@
+text
+@/*
+ * $Source: r:/source/lib/RCS/physdsk.h,v $
+ * $Revision: 1.1 $
+ * $Date: 1998/04/29 02:00:16 $
+ * $Locker: vitus $
+ *
+ *	Interface to physdsk.c
+ *
+ * $Log: physdsk.h,v $
+ * Revision 1.1  1998/04/29 02:00:16  vitus
+ * Initial revision
+ * ----------------------------------------
+ * This code is Copyright Vitus Jensen 1998
+ */
+
+extern APIRET	PDskEnum(PULONG count);
+extern APIRET	PDskOpen(ULONG idx,PULONG handle);
+extern APIRET	PDskClose(ULONG handle);
+
+extern APIRET	PDskQueryParam(ULONG handle,PDEVICEPARAMETERBLOCK dp);
+extern APIRET	PDskLockIO(ULONG handle);
+extern APIRET	PDskUnlockIO(ULONG handle);
+extern APIRET	PDskRead(ULONG handle,ULONG secno,USHORT seccnt,PVOID data);
+extern APIRET	PDskWrite(ULONG handle,ULONG secno,USHORT seccnt,PVOID data);
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d2 4
+a5 4
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Locker$
+d7 1
+a7 1
+ * Interface to physdsk.c
+d9 3
+a11 1
+ * $Log$
+d21 2
+a22 2
+extern APIRET	PDskLock(ULONG handle);
+extern APIRET	PDskUnlock(ULONG handle);
+@

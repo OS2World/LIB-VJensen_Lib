@@ -1,0 +1,59 @@
+head	1.1;
+access;
+symbols
+	VSETUP_82:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	99.11.03.22.17.51;	author vitus;	state Exp;
+branches;
+next	;
+
+
+desc
+@this program executes a warm boot!
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*
+****	OBS:	this program executes a warm boot!
+****
+****	lt. OS2PROG	fidoecho
+*/
+
+#include <stdlib.h>
+
+#define INCL_DOSFILEMGR
+#include <os2.h>
+
+
+main()
+{
+    APIRET rc;
+    HFILE hf;
+    ULONG dummy;
+
+    rc = DosOpen("DOS$", &hf, &dummy, 0L, FILE_NORMAL, FILE_OPEN,
+		 OPEN_ACCESS_WRITEONLY | OPEN_SHARE_DENYNONE |
+		 OPEN_FLAGS_FAIL_ON_ERROR, 0L);
+
+    if( !rc )
+    {
+	DosShutdown(0L);
+	DosDevIOCtl(NULL, NULL, 0xab, 0xd5, hf);
+	DosClose(hf);
+    }
+    else
+	printf("DOS.SYS not installed (sys%04u)\n", rc);
+
+    exit(rc);
+}
+
+@

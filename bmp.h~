@@ -1,0 +1,14 @@
+/*
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Locker$
+ *
+ *
+ *
+ * $Log$
+ * ----------------------------------------
+ * This code is Copyright Vitus Jensen 2001
+ */
+#pragma strings(readonly)
+static char const vcid[]="$Id$";

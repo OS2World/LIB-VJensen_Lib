@@ -1,0 +1,16 @@
+/*
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Locker$
+ *
+ *	Presentation Parameter Handling
+ *
+ * $Log$
+ * ----------------------------------------
+ * This code is Copyright Vitus Jensen 2000
+ */
+
+
+
+extern BOOL	PPSubclassWindow(HWND hwnd, PCSZ title, ULONG datalen, PVOID data);

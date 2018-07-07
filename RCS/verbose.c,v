@@ -1,0 +1,520 @@
+head	1.10;
+access;
+symbols
+	VSETUP_82:1.10;
+locks; strict;
+comment	@ * @;
+
+
+1.10
+date	99.11.04.21.12.39;	author vitus;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	98.06.04.06.31.32;	author vitus;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	97.01.22.00.41.46;	author vitus;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	96.09.10.00.36.58;	author vitus;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	96.05.12.01.21.55;	author vitus;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	96.05.11.00.56.35;	author vitus;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	96.03.23.23.42.29;	author vitus;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	96.03.13.23.35.48;	author vitus;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	96.03.13.21.09.11;	author vitus;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	96.01.27.02.53.24;	author vitus;	state Exp;
+branches;
+next	;
+
+
+desc
+@Output error/warning/verbose strings to stream
+@
+
+
+1.10
+log
+@- Verbose: always to stderr
+@
+text
+@/*
+ * $Source: r:/source/tools/RCS/verbose.c,v $
+ * $Revision: 1.9 $
+ * $Date: 1998/06/04 06:31:32 $
+ * $Locker: vitus $
+ *
+ *	Output error/warning/verbose strings to stream.
+ *
+ * $Log: verbose.c,v $
+ * Revision 1.9  1998/06/04 06:31:32  vitus
+ * - corrected strftime() call
+ * - seperated file and screen logging (added SetDisplaylevel)
+ *
+ * Revision 1.8  1997/01/22 00:41:46  vitus
+ * Loglevel now unsigned
+ * References verbose.h, not overbose.h (?)
+ *
+ * Revision 1.7  1996/09/10 00:36:58  vitus
+ * Changed to HFILE usage
+ *
+ * Revision 1.6  1996/05/12 01:21:55  vitus
+ * Changed timer to 24hour display
+ *
+ * Revision 1.5  1996/05/11 00:56:35  vitus
+ * Added support of GNU C compiler
+ *
+ * Revision 1.4  1996/03/23 23:42:29  vitus
+ * Moved newline to end of format string
+ *
+ * Revision 1.3  1996/03/13 23:35:48  vitus
+ * Changed to binkley-style output
+ *
+ * Revision 1.2  1996/03/13 21:09:11  vitus
+ * Removed initialisation of fpLogfile if IBM CSet++
+ *
+ * Revision 1.1  1996/01/27 02:53:24  vitus
+ * Initial revision
+ */
+static char const id[]="$Id: verbose.c,v 1.9 1998/06/04 06:31:32 vitus Exp vitus $";
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define INCL_DOS
+#include <os2.h>
+
+#include "verbose.h"
+
+
+static HFILE	hLogfile = 0;			/* 0 is impossible */
+static unsigned	iDisplaylevel = 1;		/* only fatal errors */
+static unsigned	iLoglevel = 1;			/* only fatal errors */
+
+static char const achLevel[] = "!*+:# ";
+
+
+
+void
+Verbose(unsigned level,char const * module,char const * fmt,...)
+{
+    APIRET rc;
+
+    if( level <= iLoglevel  &&  hLogfile != 0 )
+    {
+	va_list	argp;
+	size_t	cb = strlen(fmt)+strlen(module)+200;
+	char	*str = malloc(cb);
+	char	*buf = malloc(LOGBUFSIZ);
+	ULONG	written;
+	time_t	now = 0;
+	struct tm * timep;
+
+	if( level >= strlen(achLevel) )
+	    str[0] = ' ';
+	else
+	    str[0] = achLevel[level];
+
+	time(&now);
+	timep = localtime(&now);
+	strftime(&str[1], 200-3, " %d %b %H:%M:%S ", timep);
+
+	strcat(str, module);
+	strcat(str, " ");
+	strcat(str, fmt);			/* append format string */
+	strcat(str, "\r\n");			/* append newline */
+
+	va_start(argp,fmt);
+	vsprintf(buf, str, argp);
+	rc = DosWrite(hLogfile, buf, strlen(buf), &written);
+	va_end(argp);
+
+	free(buf);
+	free(str);
+    }
+    if( level <= iDisplaylevel )
+    {
+	va_list	argp;
+	size_t	cb = strlen(fmt)+strlen(module)+200;
+	char	*str = malloc(cb);
+
+	strcpy(str, "\r\n");
+	strcat(str, fmt);			/* append format string */
+
+	va_start(argp,fmt);
+	vfprintf(stderr, str, argp),		fflush(stderr);
+	va_end(argp);
+
+	free(str);
+    }
+
+    return;
+}
+
+
+
+
+HFILE
+SetLogfile(HFILE new)
+{
+    HFILE old = hLogfile;
+    hLogfile = new;
+    return old;
+}
+
+
+
+
+unsigned
+SetLoglevel(unsigned new)
+{
+    unsigned	old = iLoglevel;
+
+    iLoglevel = new;
+    return old;
+}
+
+
+
+
+unsigned
+SetDisplaylevel(unsigned new)
+{
+    unsigned	old = iDisplaylevel;
+
+    iDisplaylevel = new;
+    return old;
+}
+@
+
+
+1.9
+log
+@- corrected strftime() call
+- seperated file and screen logging (added SetDisplaylevel)
+@
+text
+@d2 4
+a5 4
+ * $Source: d:/source/tools/RCS/verbose.c,v $
+ * $Revision: 1.8 $
+ * $Date: 1997/01/22 00:41:46 $
+ * $Locker$
+d7 1
+a7 1
+ * Output error/warning/verbose strings to stream.
+d10 4
+d39 1
+a39 1
+static char const id[]="$Id: verbose.c,v 1.8 1997/01/22 00:41:46 vitus Exp vitus $";
+d109 1
+a109 1
+	vfprintf((level == 0 ? stderr : stdout), str, argp);
+@
+
+
+1.8
+log
+@Loglevel now unsigned
+References verbose.h, not overbose.h (?)
+@
+text
+@d2 4
+a5 4
+ * $Source: e:/source/tools/verbose.c,v $
+ * $Revision: 1.7 $
+ * $Date: 1996/09/10 00:36:58 $
+ * $Author: vitus $
+d10 4
+a33 1
+ *
+d35 1
+a35 2
+static char vcid[]="$Id: verbose.c,v 1.7 1996/09/10 00:36:58 vitus Exp vitus $";
+
+d50 2
+a51 2
+
+static HFILE	hLogfile = 2;			/* stderr? */
+d59 1
+a59 1
+Verbose(unsigned level,char *fmt,...)
+d63 1
+a63 1
+    if( level <= iLoglevel )
+d66 2
+a67 1
+	char	*str = malloc(strlen(fmt)+200);
+d78 13
+a90 3
+	time( &now );
+	timep = localtime( &now );
+	strftime( &str[1], sizeof(str)-30, " %d %b %H:%M:%S ", timep );
+d92 11
+a102 2
+	strcat( str, fmt );			/* append format string */
+	strcat( str, "\r\n" );			/* append newline */
+d105 1
+a105 2
+	vsprintf( buf, str, argp );
+	rc = DosWrite( hLogfile, buf, strlen(buf), &written );
+d108 1
+a108 2
+	free( buf );
+	free( str );
+d110 2
+d138 10
+@
+
+
+1.7
+log
+@Changed to HFILE usage
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.6 $
+ * $Date: 1996/05/12 01:21:55 $
+d10 3
+d32 1
+a32 1
+static char vcid[]="$Id: verbose.c,v 1.6 1996/05/12 01:21:55 vitus Exp $";
+d45 1
+a45 1
+#include "overbose.h"
+d50 1
+a50 1
+static int	iLoglevel = 0;			/* only fatal errors */
+d52 1
+a52 1
+static char const achLevel[] = "!*+:#";
+d57 1
+a57 1
+Verbose(int level,char *fmt,...)
+d70 1
+a70 1
+	if( level > strlen(achLevel) )
+d106 2
+a107 2
+int
+SetLoglevel(int new)
+d109 2
+a110 1
+    int old = iLoglevel;
+@
+
+
+1.6
+log
+@Changed timer to 24hour display
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.5 $
+ * $Date: 1996/05/11 00:56:35 $
+d10 3
+d29 1
+a29 1
+static char vcid[]="$Id: verbose.c,v 1.5 1996/05/11 00:56:35 vitus Exp vitus $";
+d32 1
+d35 1
+a37 1
+#include "verbose.h"
+d39 8
+a46 16
+#if defined(__IBMC__)
+/* That's IBM CSet++ 2.1: no way to set a default value. So
+ * I set a NULL pointer which will end any program which
+ * hasn't initialized via SetLogfile(). Sorry! */
+# undef stderr
+static FILE	*fpLogfile = 0;
+
+#elif defined(__GNUC__)
+static FILE	*fpLogfile = {stderr};
+
+#elif defined(__WATCOMC__)
+static FILE	*fpLogfile = {stderr};
+
+#else
+# error "unsupported compiler"
+#endif
+d49 2
+a51 1
+static char	achLevel[] = "!*+:#";
+d53 2
+a54 1
+void Verbose(int level,char *fmt,...)
+d56 2
+d61 3
+a63 1
+	char	str[200];			/* dirty, but should be enough */
+d77 1
+a77 1
+	strcat( str, "\n" );			/* append newline */
+d80 2
+a81 2
+	vfprintf( fpLogfile, str, argp );
+	fflush( fpLogfile );
+d83 3
+d92 2
+a93 1
+FILE *SetLogfile(FILE *new)
+d95 2
+a96 2
+    FILE *old = fpLogfile;
+    fpLogfile = new;
+d103 2
+a104 1
+int SetLoglevel(int new)
+@
+
+
+1.5
+log
+@Added support of GNU C compiler
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.4 $
+ * $Date: 1996/03/23 23:42:29 $
+d10 3
+d26 1
+a26 1
+static char vcid[]="$Id: verbose.c,v 1.4 1996/03/23 23:42:29 vitus Exp vitus $";
+d72 1
+a72 1
+	strftime( &str[1], sizeof(str)-30, " %d %b %X ", timep );
+@
+
+
+1.4
+log
+@Moved newline to end of format string
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.3 $
+ * $Date: 1996/03/13 23:35:48 $
+d10 3
+d23 1
+a23 1
+static char vcid[]="$Id: verbose.c,v 1.3 1996/03/13 23:35:48 vitus Exp vitus $";
+d33 4
+a36 1
+#undef stderr
+d38 4
+d44 1
+d46 1
+a46 1
+# error "unsopported compiler"
+@
+
+
+1.3
+log
+@Changed to binkley-style output
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.2 $
+ * $Date: 1996/03/13 21:09:11 $
+d10 3
+d20 1
+a20 1
+static char vcid[]="$Id: verbose.c,v 1.2 1996/03/13 21:09:11 vitus Exp vitus $";
+a50 1
+	str[0] = '\n';
+d52 1
+a52 1
+	    str[1] = ' ';
+d54 1
+a54 1
+	    str[1] = achLevel[level];
+d58 1
+a58 1
+	strftime( &str[2], sizeof(str)-30, " %d %b %X ", timep );
+d61 1
+@
+
+
+1.2
+log
+@Removed initialisation of fpLogfile if IBM CSet++
+@
+text
+@d3 2
+a4 2
+ * $Revision: 1.1 $
+ * $Date: 1996/01/27 02:53:24 $
+d10 3
+d17 1
+a17 1
+static char vcid[]="$Id: verbose.c,v 1.1 1996/01/27 02:53:24 vitus Exp vitus $";
+d22 2
+d37 1
+d44 16
+d61 1
+a61 2
+	fputc( '\n', fpLogfile );
+	vfprintf( fpLogfile, fmt, argp );
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d2 4
+a5 4
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Author$
+d9 4
+a12 1
+ * $Log$
+d14 1
+a14 1
+static char vcid[]="$Id$";
+d21 4
+d26 3
+@

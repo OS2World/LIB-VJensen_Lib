@@ -1,0 +1,122 @@
+head	1.3;
+access;
+symbols
+	VSETUP_82:1.2
+	DTestv0_71:1.1
+	DTestv0_70:1.1
+	DTestv0_61:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2000.05.14.01.26.05;	author vitus;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	97.03.23.15.36.48;	author vitus;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	96.03.17.17.31.10;	author vitus;	state Exp;
+branches;
+next	;
+
+
+desc
+@Interface to profile.c
+@
+
+
+1.3
+log
+@- added ProfileReadNext()
+@
+text
+@/*
+ * $Source: r:/source/lib/RCS/profile.h,v $
+ * $Revision: 1.2 $
+ * $Date: 1997/03/23 15:36:48 $
+ * $Locker: vitus $
+ *
+ * 	Interface to profile.c
+ *
+ * $Log: profile.h,v $
+ * Revision 1.2  1997/03/23 15:36:48  vitus
+ * Added ProfileDelete()
+ * Changed ProfileRead()
+ *
+ * Revision 1.1  1996/03/17 17:31:10  vitus
+ * Initial revision
+ * ----------------------------------------
+ * This code is given to the Public Domain.
+ */
+
+extern ULONG	ProfileOpen(HAB const hab,char const * const filename);
+
+extern ULONG	ProfileClose(HAB const hab);
+
+extern ULONG	ProfileWrite(char const * const app,
+			     char const * const key,
+			     unsigned const bufsiz,
+			     void const * const buf);
+
+extern ULONG	ProfileRead(char const * const appname,
+			    char const * const key,
+			    unsigned * const size,
+			    void * const buf);
+
+extern ULONG	ProfileReadNext(char const * const appname,
+				char * const key,
+				unsigned * const size,
+				void * const buf);
+
+extern ULONG	ProfileDelete(char const * const app,
+			      char const * const key);
+@
+
+
+1.2
+log
+@Added ProfileDelete()
+Changed ProfileRead()
+@
+text
+@d2 4
+a5 4
+ * $Source: e:/source/tools/profile.h,v $
+ * $Revision: 1.1 $
+ * $Date: 1996/03/17 17:31:10 $
+ * $Author: vitus $
+d7 1
+a7 1
+ * Interface to profile.c
+d10 4
+d16 2
+a17 1
+ *
+d33 5
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d2 4
+a5 4
+ * $Source$
+ * $Revision$
+ * $Date$
+ * $Author$
+d9 4
+a12 1
+ * $Log$
+d26 1
+a26 1
+			    unsigned const bufsiz,
+d29 2
+@
